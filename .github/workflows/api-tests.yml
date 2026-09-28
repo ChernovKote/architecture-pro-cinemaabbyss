@@ -83,13 +83,13 @@ jobs:
             docker run --rm \
             --network=cinemaabyss-network \
             -v "$PWD/reports:/app/reports" \
-            cinemaabyss-api-tests 
+            cinemaabyss-api-tests \
             --environment docker --folder "$TEST_FOLDER"
           else
             docker run --rm \
             --network=cinemaabyss-network \
             -v "$PWD/reports:/app/reports" \
-            cinemaabyss-api-tests 
+            cinemaabyss-api-tests \
             --environment docker
           fi
 
