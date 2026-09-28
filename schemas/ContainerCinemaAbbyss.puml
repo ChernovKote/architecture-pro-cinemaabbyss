@@ -1,0 +1,112 @@
+@startuml
+title CimenaAbbyss Container Diagram
+
+top to bottom direction
+
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+Person(user, "User", "A user of the online cinema system")
+Person(admin, "Administrator", "An administrator managing the system")
+
+System_Boundary(cinemaabbyss, "CimenaAbbyss System") {
+    Container(web_app, "Web Application", "TypeScript, React", "Provides the user interface for web client")
+    Container(mobile_app, "Mobile Application", "Kotlin", "Provides the user interface for mobile client")
+    Container(smarttv_app, "SmartTV Application", "JavaScript", "Provides the user interface for Smart TV client")
+
+
+    Container(bff_web, "BFF Service for Web", "Go", "Provides the responses specialized for web client")
+    Container(bff_mobile, "BFF Service for Mobile", "Go", "Provides the responses specialized for mobile client")
+    Container(bff_smarttv, "BFF Service for SmartTV", "Go", "Provides the responses specialized for SmartTV client")
+
+
+    Container(api_gateway, "API Gateway", "Python, FastAPI", "Authenticates users and routes requests")
+
+    Container(movies_api, "Movies API", "Go", "Provides and manages movies data")
+    ContainerDb(movies_db, "Movies Database", "PostgreSQL", "movies, movie_genres")
+
+    Container(watch_api, "Watch API", "Go", "Saves ratings and views of the users")
+    ContainerDb(watch_db, "Watch Database", "PostgreSQL", "user_ratings, views")
+
+
+    Container(users_api, "Users API", "Go", "Manages users and their roles")
+    ContainerDb(users_db, "Users Database", "PostgreSQL", "users, roles, permissions, notifications_settings")
+
+
+    Container(notifications_api, "Notification API", "Go", "Handles notifications")
+    ContainerDb(notifications_db, "Notification Database", "PostgreSQL", "notifications")
+
+    Container(payments_api, "Payments API", "Go", "Manages subscriptions and payments")
+    ContainerDb(payments_db, "Payments Database", "PostgreSQL", "subscriptions, payments")
+
+
+    ContainerDb(movies_s3, "Movies S3", "S3", "Stores movies")
+
+
+    ContainerQueue(kafka, "Kafka Broker", "Kafka-TCP", "Exchange of the system messages")
+    ContainerQueue(rabbitmq, "RabbitMQ", "AMQP", "Interactions with external recommendations system")
+
+}
+
+System_Ext(recomendation_system, "Recommendation System", "External system for movies recommendations")
+System_Ext(payment_gateway, "Payments Gateway", "External system for handling banking operations")
+
+Rel(user, web_app, "Uses")
+Rel(user, mobile_app, "Uses")
+Rel(user, smarttv_app, "Uses")
+
+Rel(admin, web_app, "Manages the system")
+
+Rel(web_app, bff_web, "Uses")
+Rel(mobile_app, bff_mobile, "Uses")
+Rel(smarttv_app, bff_smarttv, "Uses")
+
+Rel(web_app, movies_s3, "Streaming of video")
+Rel(mobile_app, movies_s3, "Streaming of video")
+Rel(smarttv_app, movies_s3, "Streaming of video")
+
+Rel(web_app, payment_gateway, "Handle the payment")
+Rel(mobile_app, payment_gateway, "Handle the payment")
+Rel(smarttv_app, payment_gateway, "Handle the payment")
+
+Rel(bff_web, api_gateway, "Sends requests")
+Rel(bff_mobile, api_gateway, "Sends requests")
+Rel(bff_smarttv, api_gateway, "Sends requests")
+
+
+Rel(api_gateway, movies_api, "Proxies the requests")
+Rel(api_gateway, users_api, "Proxies the requests")
+Rel(api_gateway, payments_api, "Proxies the requests")
+Rel(api_gateway, watch_api, "Proxies the requests")
+Rel(api_gateway, notifications_api, "Proxies the requests")
+
+
+
+Rel(movies_api, recomendation_system, "Requests the recommentations for current user")
+
+Rel(recomendation_system, rabbitmq, "Recieve the msignal of films that user watched and rated")
+
+Rel(watch_api, rabbitmq, "Sends information about views and ratings from users")
+Rel(watch_api, watch_db, "Proxies the requests")
+
+
+Rel(notifications_api, notifications_db, "Saves and extracts messages")
+Rel(notifications_api, kafka, "Consumes messages and signals")
+
+Rel(movies_api, kafka, "Produces messages about new films")
+Rel(payments_api, kafka, "Produces messages about payment details")
+
+
+
+Rel(movies_api, movies_db, "Manages the movies data")
+Rel(movies_api, movies_s3, "Generates the links for streaming")
+
+Rel(movies_api, recomendation_system, "Requests the recommendations for user, enriches it with metadata for each movie")
+
+Rel(users_api, users_db, "Manages the users data")
+Rel(payments_api, payments_db, "Manages the payments data")
+
+Rel(payments_api, payment_gateway, "Handles the payments")
+
+
+
+@enduml
