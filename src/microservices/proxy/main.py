@@ -100,7 +100,10 @@ def prepare_response_headers(
 
     return {"content-type": content_type}
 
-
+@app.get("/health")
+async def health() -> dict[str, bool]:
+    return {"status": True}
+    
 @app.api_route(
     "/{path:path}",
     methods=[
