@@ -46,44 +46,49 @@ spec:
         app: zookeeper
     spec:
       containers:
-      - name: zookeeper
-        image: wurstmeister/zookeeper
-        ports:
-        - containerPort: 2181
-          name: client
-        - containerPort: 2888
-          name: server
-        - containerPort: 3888
-          name: leader-election
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "100m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-        env:
-        - name: ZOOKEEPER_CLIENT_PORT
-          value: "2181"
-        - name: ZOOKEEPER_TICK_TIME
-          value: "2000"
-        volumeMounts:
-        - name: zookeeper-data
-          mountPath: /var/lib/zookeeper/data
-        readinessProbe:
-          tcpSocket:
-            port: 2181
-          initialDelaySeconds: 10
-          periodSeconds: 10
-        livenessProbe:
-          tcpSocket:
-            port: 2181
-          initialDelaySeconds: 30
-          periodSeconds: 15
+        - name: zookeeper
+          image: zookeeper:3.8
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: client
+              containerPort: 2181
+            - name: server
+              containerPort: 2888
+            - name: election
+              containerPort: 3888
+
+          env:
+            - name: ZOO_TICK_TIME
+              value: "2000"
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
+
+          readinessProbe:
+            tcpSocket:
+              port: 2181
+            initialDelaySeconds: 10
+            periodSeconds: 10
+
+          livenessProbe:
+            tcpSocket:
+              port: 2181
+            initialDelaySeconds: 30
+            periodSeconds: 15
+
+          volumeMounts:
+            - name: zookeeper-data
+              mountPath: /data
       volumes:
-      - name: zookeeper-data
-        persistentVolumeClaim:
-          claimName: zookeeper-data
+        - name: zookeeper-data
+          persistentVolumeClaim:
+            claimName: zookeeper-data
 ---
 apiVersion: v1
 kind: Service
@@ -157,6 +162,8 @@ spec:
           value: "1"
         - name: KAFKA_LOG_DIRS
           value: "/kafka/kafka-logs"
+        - name: KAFKA_HEAP_OPTS
+          value: "-Xms256m -Xmx512m"
         volumeMounts:
         - name: kafka-data
           mountPath: /kafka

@@ -5,7 +5,7 @@
 1. Спроектируйте to be архитектуру КиноБездны, разделив всю систему на отдельные домены и организовав интеграционное взаимодействие и единую точку вызова сервисов.
 Результат представьте в виде контейнерной диаграммы в нотации С4.
 Добавьте ссылку на файл в этот шаблон
-[ссылка на файл](ссылка)
+![Схема контейнеров для будущей системы](./schemas/ContainerCinemaAbbyss.svg)
 
 
 ## Задание 2
@@ -59,6 +59,7 @@
 Необходимые тесты для проверки этого API вызываются при запуске npm run test:local из папки tests/postman 
 Приложите скриншот тестов и скриншот состояния топиков Kafka http://localhost:8090 
 
+Скриншоты по ссылке: [Ссылка](./screenshots)
 
 ## Задание 3
 
@@ -110,6 +111,8 @@ jobs:
 Как только сборка отработает и в github registry появятся ваши образы, можно переходить к блоку настройки Kubernetes
 Успешным результатом данного шага является "зеленая" сборка и "зеленые" тесты
 
+- Локальный кластер работает на Mac с Apple Silicon, поэтому образы публиковались для linux/amd64 и linux/arm64. Иначе Kubernetes завершал загрузку ошибкой "no matching manifest for linux/arm64/v8".
+
 
 ### Proxy в Kubernetes
 
@@ -127,6 +130,8 @@ jobs:
 ```bash
  .dockerconfigjson: значение в base64 файла ~/.docker/config.json
 ```
+
+- Docker Desktop на macOS хранит учетные данные через credsStore, который недоступен из Kubernetes. Поэтому для GHCR в секрете использовалось явное поле auth, сформированное из username:PAT. Токен в репозиторий не добавлялся.
 
 4. Если в ~/.docker/config.json нет значения для аутентификации
 ```json
@@ -201,6 +206,7 @@ cat .docker/config.json | base64
   ```bash
   kubectl apply -f src/kubernetes/kafka/kafka.yaml
   ```
+- Устаревший wurstmeister/zookeeper завершался с OOMKilled, поэтому использован официальный zookeeper:3.8 с лимитом памяти 768Mi.
 
   Проверьте, теперь должно быть запущено 3 пода, если что-то не так, то посмотрите логи
   ```bash
@@ -260,6 +266,9 @@ cat .docker/config.json | base64
   ```bash
   minikube tunnel
   ```
+
+- Вместо Minikube использовался Kubernetes из Docker Desktop. Поэтому "minikube addons enable ingress" и "minikube tunnel" не применялись: был установлен NGINX Ingress Controller, а домен направлен на 127.0.0.1 через /etc/hosts.
+
   11. Вызовите https://cinemaabyss.example.com/api/movies
   Вы должны увидеть вывод списка фильмов
   Можно поэкспериментировать со значением   MOVIES_MIGRATION_PERCENT в src/kubernetes/configmap.yaml и убедится, что вызовы movies уходят полностью в новый сервис
@@ -268,11 +277,22 @@ cat .docker/config.json | base64
   ```bash
    npm run test:kubernetes
   ```
+
+- Тесты запускались на Node.js 22 LTS. Node.js 26 вызывал ошибку совместимости CommonJS/ESM в зависимости yargs. Поскольку TLS в Ingress не настроен, локальная проверка API выполнялась по http://cinemaabyss.example.com.
+
   Часть тестов с health-чек упадет, но создание событий отработает.
   Откройте логи event-service и сделайте скриншот обработки событий
 
 #### Шаг 3
 Добавьте сюда скриншота вывода при вызове https://cinemaabyss.example.com/api/movies и  скриншот вывода event-service после вызова тестов.
+
+### Kubernetes: получение списка фильмов
+
+![Movies API](screenshots/kubernetes-tests/image.png)
+
+### Kubernetes: обработка событий
+
+![Events Service logs](screenshots/kubernetes-tests/logs.png)
 
 
 ## Задание 4
@@ -322,6 +342,8 @@ template:
        Тут ваша конфигурация
 ```
 
+- Для прохождения строгой проверки Kubernetes поля requests и limits размещены внутри resources; repository и tag образов разделены; у Proxy Service настроено соответствие port: 80 на targetPort: 8000.
+
 3. Проверьте установку
 Сначала удалим установку руками
 
@@ -333,6 +355,10 @@ kubectl delete  namespace cinemaabyss
 ```bash
 helm install cinemaabyss .\src\kubernetes\helm --namespace cinemaabyss --create-namespace
 ```
+
+- В macOS использовался Unix-путь ./src/kubernetes/helm. После первой установки последующие изменения применялись через helm upgrade, так как повторный helm install возвращает "cannot reuse a name that is still in use".
+
+
 Если в процессе будет ошибка
 ```code
 [2025-04-08 21:43:38,780] ERROR Fatal error during KafkaServer startup. Prepare to shutdown (kafka.server.KafkaServer)
@@ -349,6 +375,13 @@ minikube tunnel
 https://cinemaabyss.example.com/api/movies
 и приложите скриншот развертывания helm и вывода https://cinemaabyss.example.com/api/movies
 
+### Helm: подняты сервисы
+
+![Helm Ready](screenshots/helm/movies-ok.png)
+
+### Helm: получение списка фильмов
+
+![Movies API](screenshots/helm/helm-ok.png)
 
 # Задание 5
 Компания планирует активно развиваться и для повышения надежности, безопасности, реализации сетевых паттернов типа Circuit Breaker и канареечного деплоя вам как архитектору необходимо развернуть istio и настроить circuit breaker для monolith и movies сервисов.
@@ -372,12 +405,16 @@ kubectl apply -f .\src\kubernetes\circuit-breaker-config.yaml -n cinemaabyss
 
 ```
 
+- Перед установкой kubectl был обновлен с до 1.37.1 для совместимости с Kubernetes Server 1.36.1. Istio 1.30.5 устанавливался в порядке istio-base - istiod - istio-ingressgateway. Приложение уже было установлено, поэтому вместо повторного helm install после включения istio-injection` были перезапущены прикладные Deployment для добавления sidecar-контейнеров.
+
 Тестирование
 
 # fortio
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.25/samples/httpbin/sample-client/fortio-deploy.yaml -n cinemaabyss
 ```
+
+- Для совпадения с установленным Istio использовался Fortio из ветки release-1.30.
 
 # Get the fortio pod name
 ```bash
@@ -414,6 +451,12 @@ You can see 21 for the upstream_rq_pending_overflow value which means 21 calls s
 ```
 
 Приложите скриншот работы circuit breaker'а
+
+В результате теста 11 запросов получили 200, а 489 — 503. Значение upstream_rq_pending_overflow: 489 подтверждает срабатывание circuit breaker.
+
+### Circuit Breaker: фиксация работы
+
+![Circuit Breaker](screenshots/circuit-breaker/breaker.png)
 
 Удаляем все
 ```bash

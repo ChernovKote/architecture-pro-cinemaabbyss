@@ -2,70 +2,97 @@ name: API Tests
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [cinema]
+
   pull_request:
-    branches: [ main, master ]
+    branches: [main]
+
   workflow_dispatch:
     inputs:
       environment:
-        description: 'Environment to run tests against'
+        description: "Environment to run tests against"
         required: true
-        default: 'docker'
+        default: docker
         type: choice
         options:
           - local
           - docker
+
       test_folder:
-        description: 'Test folder to run (leave empty for all)'
+        description: "Postman collection folder (leave empty for all)"
         required: false
         type: string
+
+env:
+  TEST_ENVIRONMENT: ${{ inputs.environment || 'docker' }}
+  TEST_FOLDER: ${{ inputs.test_folder || '' }}
 
 jobs:
   api-tests:
     name: Run API Tests
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v6
 
-      - name: Set up Docker Compose
+      - name: Check Docker Compose
+        run: docker compose version
+
+      - name: Start services
         run: |
-          docker compose --version
-      
-      - name: Start services with Docker Compose
-        run: |
-          docker compose up -d
-          # Wait for services to be ready
-          echo "Waiting for services to be ready..."
-          sleep 120
-      
+          docker compose up -d --build
+          sleep 60
+
       - name: Set up Node.js
-        uses: actions/setup-node@v3
+        if: ${{ env.TEST_ENVIRONMENT == 'local' }}
+        uses: actions/setup-node@v7
         with:
-          node-version: '18'
-          cache: 'npm'
+          node-version: "22"
+          cache: npm
           cache-dependency-path: tests/postman/package-lock.json
-      
-      - name: Install Newman and dependencies
+
+      - name: Install test dependencies
+        if: ${{ env.TEST_ENVIRONMENT == 'local' }}
         working-directory: tests/postman
-        run: npm install
-      
-      - name: Run API tests
+        run: npm ci
+
+      - name: Run tests locally
+        if: ${{ env.TEST_ENVIRONMENT == 'local' }}
         working-directory: tests/postman
+        shell: bash
+        run: |
+          if [ -n "$TEST_FOLDER" ]; then
+            npm run test:local -- --folder "$TEST_FOLDER"
+          else
+            npm run test:local
+          fi
+
+      - name: Build API tests image
+        if: ${{ env.TEST_ENVIRONMENT == 'docker' }}
+        working-directory: tests/postman
+        run: docker build -t cinemaabyss-api-tests .
+
+      - name: Run API tests in Docker
+        if: ${{ env.TEST_ENVIRONMENT == 'docker' }}
+        working-directory: tests/postman
+        shell: bash
         run: |
 
-          docker compose up -d
-          # Wait for services to be ready
-          echo "Waiting for services to be ready..."
-          sleep 15
-          # Build the Docker image
-          docker build -t cinemaabyss-api-tests .
-          
-          # Run the tests in Docker
-          docker run --network=cinemaabyss-network -v "$(pwd)/reports:/app/reports" cinemaabyss-api-tests
-        
-      
+          if [ -n "$TEST_FOLDER" ]; then
+            docker run --rm \
+            --network=cinemaabyss-network \
+            -v "$PWD/reports:/app/reports" \
+            cinemaabyss-api-tests \
+            --environment docker --folder "$TEST_FOLDER"
+          else
+            docker run --rm \
+            --network=cinemaabyss-network \
+            -v "$PWD/reports:/app/reports" \
+            cinemaabyss-api-tests \
+            --environment docker
+          fi
+
       - name: Stop services
-        if: always()
+        if: ${{ always() }}
         run: docker compose down

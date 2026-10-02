@@ -1,0 +1,20 @@
+[project]
+name = "events"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Константин Чернов",email = "ckv@liis.su"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi (>=0.141.1,<0.142.0)",
+    "aiokafka (>=0.14.0,<0.15.0)",
+    "pydantic (>=2.13.5,<3.0.0)",
+    "uvicorn[standard] (>=0.54.0,<0.55.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
